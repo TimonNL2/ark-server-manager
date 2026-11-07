@@ -1,4 +1,13 @@
-import type { CreateClusterInput, CreateInstanceInput, GameEdition, ServerInstance, Cluster } from "@ark-host/shared";
+import type {
+  CreateClusterInput,
+  CreateInstanceInput,
+  GameEdition,
+  ServerInstance,
+  Cluster,
+  InstanceGameSettings,
+  ModEntry,
+} from "@ark-host/shared";
+import { DEFAULT_GAME_SETTINGS, parseModsToList } from "@ark-host/shared";
 import path from "node:path";
 import { getDb } from "./db.js";
 import { panelConfig } from "./config.js";
@@ -31,8 +40,201 @@ export interface InstanceRow {
   install_path: string;
   extra_args: string;
   auto_start: number;
+  settings_json: string;
   created_at: string;
   updated_at: string;
+}
+
+type StoredExtras = Partial<InstanceGameSettings> & { mods?: string };
+
+function parseExtras(raw: string | null | undefined): StoredExtras {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as StoredExtras;
+  } catch {
+    return {};
+  }
+}
+
+function pickNum(
+  extras: StoredExtras,
+  key: keyof InstanceGameSettings,
+  fallback: number,
+): number {
+  const v = extras[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+function pickBool(
+  extras: StoredExtras,
+  key: keyof InstanceGameSettings,
+  fallback: boolean,
+): boolean {
+  const v = extras[key];
+  return typeof v === "boolean" ? v : fallback;
+}
+
+export function buildSettingsFromRow(
+  row: InstanceRow,
+  cluster: ClusterRow | null,
+): InstanceGameSettings {
+  const extras = parseExtras(row.settings_json);
+  const modList: ModEntry[] =
+    extras.modList !== undefined
+      ? parseModsToList(extras.modList)
+      : parseModsToList(extras.mods);
+
+  return {
+    name: row.name,
+    sessionName: row.session_name,
+    serverPassword: row.server_password ?? "",
+    adminPassword: row.admin_password,
+    maxPlayers: row.max_players,
+    mapId: row.map_id,
+    difficultyOffset: pickNum(extras, "difficultyOffset", DEFAULT_GAME_SETTINGS.difficultyOffset),
+    overrideOfficialDifficulty: pickNum(
+      extras,
+      "overrideOfficialDifficulty",
+      DEFAULT_GAME_SETTINGS.overrideOfficialDifficulty,
+    ),
+    xpMultiplier: pickNum(extras, "xpMultiplier", DEFAULT_GAME_SETTINGS.xpMultiplier),
+    tamingSpeedMultiplier: pickNum(
+      extras,
+      "tamingSpeedMultiplier",
+      DEFAULT_GAME_SETTINGS.tamingSpeedMultiplier,
+    ),
+    harvestAmountMultiplier: pickNum(
+      extras,
+      "harvestAmountMultiplier",
+      DEFAULT_GAME_SETTINGS.harvestAmountMultiplier,
+    ),
+    harvestHealthMultiplier: pickNum(
+      extras,
+      "harvestHealthMultiplier",
+      DEFAULT_GAME_SETTINGS.harvestHealthMultiplier,
+    ),
+    resourcesRespawnPeriodMultiplier: pickNum(
+      extras,
+      "resourcesRespawnPeriodMultiplier",
+      DEFAULT_GAME_SETTINGS.resourcesRespawnPeriodMultiplier,
+    ),
+    matingIntervalMultiplier: pickNum(
+      extras,
+      "matingIntervalMultiplier",
+      DEFAULT_GAME_SETTINGS.matingIntervalMultiplier,
+    ),
+    eggHatchSpeedMultiplier: pickNum(
+      extras,
+      "eggHatchSpeedMultiplier",
+      DEFAULT_GAME_SETTINGS.eggHatchSpeedMultiplier,
+    ),
+    babyMatureSpeedMultiplier: pickNum(
+      extras,
+      "babyMatureSpeedMultiplier",
+      DEFAULT_GAME_SETTINGS.babyMatureSpeedMultiplier,
+    ),
+    babyCuddleIntervalMultiplier: pickNum(
+      extras,
+      "babyCuddleIntervalMultiplier",
+      DEFAULT_GAME_SETTINGS.babyCuddleIntervalMultiplier,
+    ),
+    babyImprintAmountMultiplier: pickNum(
+      extras,
+      "babyImprintAmountMultiplier",
+      DEFAULT_GAME_SETTINGS.babyImprintAmountMultiplier,
+    ),
+    layEggIntervalMultiplier: pickNum(
+      extras,
+      "layEggIntervalMultiplier",
+      DEFAULT_GAME_SETTINGS.layEggIntervalMultiplier,
+    ),
+    structureResistanceMultiplier: pickNum(
+      extras,
+      "structureResistanceMultiplier",
+      DEFAULT_GAME_SETTINGS.structureResistanceMultiplier,
+    ),
+    structureDamageMultiplier: pickNum(
+      extras,
+      "structureDamageMultiplier",
+      DEFAULT_GAME_SETTINGS.structureDamageMultiplier,
+    ),
+    structurePreventResourceRadiusMultiplier: pickNum(
+      extras,
+      "structurePreventResourceRadiusMultiplier",
+      DEFAULT_GAME_SETTINGS.structurePreventResourceRadiusMultiplier,
+    ),
+    pveStructureDecayPeriodMultiplier: pickNum(
+      extras,
+      "pveStructureDecayPeriodMultiplier",
+      DEFAULT_GAME_SETTINGS.pveStructureDecayPeriodMultiplier,
+    ),
+    maxStructuresInRange: pickNum(
+      extras,
+      "maxStructuresInRange",
+      DEFAULT_GAME_SETTINGS.maxStructuresInRange,
+    ),
+    serverPve: pickBool(extras, "serverPve", DEFAULT_GAME_SETTINGS.serverPve),
+    disableStructureDecayPve: pickBool(
+      extras,
+      "disableStructureDecayPve",
+      DEFAULT_GAME_SETTINGS.disableStructureDecayPve,
+    ),
+    disableDinoDecayPve: pickBool(
+      extras,
+      "disableDinoDecayPve",
+      DEFAULT_GAME_SETTINGS.disableDinoDecayPve,
+    ),
+    allowCaveBuildingPve: pickBool(
+      extras,
+      "allowCaveBuildingPve",
+      DEFAULT_GAME_SETTINGS.allowCaveBuildingPve,
+    ),
+    gamePort: row.game_port,
+    queryPort: row.query_port,
+    rconPort: row.rcon_port,
+    rconPassword:
+      typeof extras.rconPassword === "string"
+        ? extras.rconPassword
+        : DEFAULT_GAME_SETTINGS.rconPassword,
+    crossplay: pickBool(extras, "crossplay", DEFAULT_GAME_SETTINGS.crossplay),
+    battleEye: pickBool(extras, "battleEye", DEFAULT_GAME_SETTINGS.battleEye),
+    modList,
+    clusterId: row.cluster_ref,
+    transferInventory: cluster ? Boolean(cluster.transfer_inventory) : true,
+    transferDinos: cluster ? Boolean(cluster.transfer_dinos) : true,
+    transferTribute: cluster ? Boolean(cluster.transfer_tribute) : true,
+    autoSavePeriodMinutes: pickNum(
+      extras,
+      "autoSavePeriodMinutes",
+      DEFAULT_GAME_SETTINGS.autoSavePeriodMinutes,
+    ),
+    messageOfTheDay:
+      typeof extras.messageOfTheDay === "string"
+        ? extras.messageOfTheDay
+        : DEFAULT_GAME_SETTINGS.messageOfTheDay,
+    extraArgs: row.extra_args,
+  };
+}
+
+export function extrasJsonFromSettings(settings: InstanceGameSettings): string {
+  const {
+    name: _n,
+    sessionName: _s,
+    serverPassword: _sp,
+    adminPassword: _ap,
+    maxPlayers: _mp,
+    mapId: _m,
+    gamePort: _gp,
+    queryPort: _qp,
+    rconPort: _rp,
+    clusterId: _c,
+    transferInventory: _ti,
+    transferDinos: _td,
+    transferTribute: _tt,
+    extraArgs: _e,
+    ...extras
+  } = settings;
+  return JSON.stringify(extras);
 }
 
 export function mapCluster(row: ClusterRow): Cluster {
@@ -163,8 +365,9 @@ export function createInstance(input: CreateInstanceInput): InstanceRow {
     .prepare(
       `INSERT INTO instances
        (id, name, edition, map_id, session_name, game_port, query_port, rcon_port, max_players,
-        admin_password, server_password, cluster_ref, install_path, extra_args, auto_start, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        admin_password, server_password, cluster_ref, install_path, extra_args, auto_start,
+        settings_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -182,6 +385,7 @@ export function createInstance(input: CreateInstanceInput): InstanceRow {
       installPath,
       input.extraArgs ?? "",
       input.autoStart ? 1 : 0,
+      "{}",
       now,
       now,
     );
@@ -213,6 +417,41 @@ export function updateInstance(id: string, input: Partial<CreateInstanceInput>):
       input.clusterId === undefined ? existing.cluster_ref : input.clusterId,
       input.extraArgs ?? existing.extra_args,
       (input.autoStart ?? Boolean(existing.auto_start)) ? 1 : 0,
+      now,
+      id,
+    );
+  return getInstanceRow(id)!;
+}
+
+/** Persist Settings tab: core columns + extras JSON. */
+export function saveInstanceSettingsRow(
+  id: string,
+  settings: InstanceGameSettings,
+): InstanceRow | null {
+  const existing = getInstanceRow(id);
+  if (!existing) return null;
+  const now = new Date().toISOString();
+  getDb()
+    .prepare(
+      `UPDATE instances SET
+        name=?, map_id=?, session_name=?, game_port=?, query_port=?, rcon_port=?,
+        max_players=?, admin_password=?, server_password=?, cluster_ref=?, extra_args=?,
+        settings_json=?, updated_at=?
+       WHERE id=?`,
+    )
+    .run(
+      settings.name,
+      settings.mapId,
+      settings.sessionName,
+      settings.gamePort,
+      settings.queryPort,
+      settings.rconPort,
+      settings.maxPlayers,
+      settings.adminPassword,
+      settings.serverPassword || null,
+      settings.clusterId,
+      settings.extraArgs,
+      extrasJsonFromSettings(settings),
       now,
       id,
     );

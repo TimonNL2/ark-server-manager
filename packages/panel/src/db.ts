@@ -67,5 +67,11 @@ export function initDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   `);
 
+  // Lightweight migrations for existing SQLite files
+  const cols = db.prepare("PRAGMA table_info(instances)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "settings_json")) {
+    db.exec(`ALTER TABLE instances ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}'`);
+  }
+
   return db;
 }

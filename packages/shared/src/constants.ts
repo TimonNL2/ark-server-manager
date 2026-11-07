@@ -20,5 +20,5 @@ export const PORT_STRIDE = {
 export const PANEL_DEFAULT_PORT = 3000;
 export const DAEMON_DEFAULT_PORT = 3920;
 
-export const PANEL_VERSION = "0.1.0";
-export const DAEMON_VERSION = "0.1.0";
+export const PANEL_VERSION = "0.2.0";
+export const DAEMON_VERSION = "0.2.0";

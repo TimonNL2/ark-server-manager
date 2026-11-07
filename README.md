@@ -4,14 +4,17 @@ Simple web panel for **ARK: Survival Ascended** and **ARK: Survival Evolved** de
 
 > English UI only. Ubuntu Server on Proxmox is the primary deploy target. One `install.sh` bootstraps the stack.
 
-## Features (ASM-2 + ASM-3)
+## Features (ASM-2 → ASM-6)
 
 - Local admin auth (session cookie)
 - CRUD for **ServerInstance** (ASA \| ASE) and **Cluster**
 - Start / stop / restart via host **daemon**
 - Create-instance wizard (edition, map, ports, cluster attach)
+- **Settings tab** — rates, breeding, structures, PvE/PvP, ports, MOTD, cluster transfers; writes `GameUserSettings.ini` / `Game.ini` on Save **and every Start**
+- **Config editor** — INI preview + optional raw edit for GUS + Game.ini
+- **Mods** — ordered CurseForge (ASA) / Workshop (ASE) IDs → `-mods=` launch arg; Crossplay / BattlEye toggles
 - **Instance detail**: live WebSocket console, sandboxed file browser, launch-command preview
-- **Cluster apply**: shared cluster dir + `GameUserSettings.ini` transfer flags
+- **Cluster apply**: shared cluster dir + transfer PreventDownload/Upload* flags
 - SteamCMD update action (anonymous app ids; mocked when `ARK_HOST_MOCK=1`)
 - **Mock mode** so the UI works without downloading multi‑GB servers
 - Idempotent-ish Ubuntu **install.sh** (Node, Caddy, systemd, secrets, admin user)
@@ -94,9 +97,10 @@ See [`docs/proxmox.md`](docs/proxmox.md). Bridge networking, forward game UDP po
 
 ## Roadmap (next)
 
-- RCON input in the live console
-- Backups / scheduled restarts
-- Update-job progress UI beyond the SteamCMD stub
+- Players list + RCON console quick commands
+- Backups, schedules, auto-update, crash recovery
+- Cluster broadcast start/stop/update
+- File manager rename + zip/unzip
 
 ## License
 

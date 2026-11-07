@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ensureClusterDir, ensureInstanceDir, resolveInstancePath } from "./file-sandbox.js";
 import type { GameEdition } from "@ark-host/shared";
+import { boolIni, upsertIniSectionKeys } from "./ini-merge.js";
 
 export interface ClusterTransferSettings {
   clusterToken: string;
@@ -18,36 +19,17 @@ export function mergeGameUserSettings(
   existing: string,
   settings: ClusterTransferSettings,
 ): string {
-  const preventItems = settings.transferInventory ? "False" : "True";
-  const preventDinos = settings.transferDinos ? "False" : "True";
-  // Tribute / character closely follows survivor transfer; keep paired with inventory for MVP.
-  const preventSurvivors = settings.transferTribute ? "False" : "True";
-
   const keys: Record<string, string> = {
-    PreventDownloadSurvivors: preventSurvivors,
-    PreventDownloadItems: preventItems,
-    PreventDownloadDinos: preventDinos,
-    PreventUploadSurvivors: preventSurvivors,
-    PreventUploadItems: preventItems,
-    PreventUploadDinos: preventDinos,
+    PreventDownloadSurvivors: boolIni(!settings.transferTribute),
+    PreventDownloadItems: boolIni(!settings.transferInventory),
+    PreventDownloadDinos: boolIni(!settings.transferDinos),
+    PreventUploadSurvivors: boolIni(!settings.transferTribute),
+    PreventUploadItems: boolIni(!settings.transferInventory),
+    PreventUploadDinos: boolIni(!settings.transferDinos),
   };
 
-  let text = existing.replace(/\r\n/g, "\n");
-  if (!/\[ServerSettings\]/i.test(text)) {
-    text = `[ServerSettings]\n${text}`.trimStart();
-  }
-
-  for (const [key, value] of Object.entries(keys)) {
-    const re = new RegExp(`^${key}=.*$`, "im");
-    if (re.test(text)) {
-      text = text.replace(re, `${key}=${value}`);
-    } else {
-      text = text.replace(/\[ServerSettings\]/i, `[ServerSettings]\n${key}=${value}`);
-    }
-  }
-
-  if (!text.endsWith("\n")) text += "\n";
-  return text;
+  let text = existing.trim() ? existing : "[ServerSettings]\n";
+  return upsertIniSectionKeys(text, "ServerSettings", keys);
 }
 
 function gusPaths(edition: GameEdition, instanceId: string): string[] {

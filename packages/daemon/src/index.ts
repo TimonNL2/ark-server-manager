@@ -18,6 +18,12 @@ import {
   writeFileText,
 } from "./file-sandbox.js";
 import { runSteamCmdUpdate } from "./steamcmd.js";
+import {
+  applyGameSettings,
+  previewGameSettings,
+  relativeIniPaths,
+} from "./settings-config.js";
+import { instanceGameSettingsSchema, modEntrySchema } from "@ark-host/shared";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -41,6 +47,11 @@ const managedSpecSchema = z.object({
   transferTribute: z.boolean(),
   installPath: z.string(),
   extraArgs: z.string(),
+  battleEye: z.boolean().optional(),
+  crossplay: z.boolean().optional(),
+  mods: z.string().optional(),
+  modList: z.array(modEntrySchema).optional(),
+  gameSettings: instanceGameSettingsSchema.optional(),
 });
 
 const clusterApplySchema = z.object({
@@ -49,6 +60,14 @@ const clusterApplySchema = z.object({
   transferInventory: z.boolean(),
   transferDinos: z.boolean(),
   transferTribute: z.boolean(),
+});
+
+const settingsApplySchema = z.object({
+  edition: z.enum(["ASA", "ASE"]),
+  settings: instanceGameSettingsSchema,
+  writeRaw: z.boolean().optional().default(false),
+  rawGameUserSettings: z.string().max(500_000).optional(),
+  rawGameIni: z.string().max(500_000).optional(),
 });
 
 async function main(): Promise<void> {
@@ -296,6 +315,51 @@ async function main(): Promise<void> {
     try {
       const result = await applyClusterSettings(req.params.id, parsed.data.edition, parsed.data);
       return result;
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "Apply failed" });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/instances/:id/settings/preview", async (req, reply) => {
+    const parsed = settingsApplySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid settings", details: parsed.error.flatten() });
+    }
+    try {
+      const preview = await previewGameSettings(
+        req.params.id,
+        parsed.data.edition,
+        parsed.data.settings,
+      );
+      return {
+        preview,
+        iniPaths: relativeIniPaths(parsed.data.edition),
+      };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "Preview failed" });
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/instances/:id/settings/apply", async (req, reply) => {
+    const parsed = settingsApplySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid settings", details: parsed.error.flatten() });
+    }
+    try {
+      const result = await applyGameSettings(
+        req.params.id,
+        parsed.data.edition,
+        parsed.data.settings,
+        {
+          writeRaw: parsed.data.writeRaw,
+          rawGameUserSettings: parsed.data.rawGameUserSettings,
+          rawGameIni: parsed.data.rawGameIni,
+        },
+      );
+      return {
+        ...result,
+        iniPaths: relativeIniPaths(parsed.data.edition),
+      };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "Apply failed" });
     }
