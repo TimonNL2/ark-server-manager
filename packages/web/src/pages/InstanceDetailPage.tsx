@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { Cluster, LaunchPreview, ServerInstance, SteamCmdUpdateResult } from "@ark-host/shared";
 import { api, ApiError } from "../api";
 import { FileBrowser } from "../components/FileBrowser";
+import { InstanceSettings } from "../components/InstanceSettings";
 import { LiveConsole } from "../components/LiveConsole";
 
-type Tab = "overview" | "console" | "files" | "launch";
+type Tab = "overview" | "settings" | "console" | "files" | "launch";
+
+const TABS: Tab[] = ["overview", "settings", "console", "files", "launch"];
 
 function StatusBadge({ status }: { status: ServerInstance["status"] }) {
   const live = status === "running" || status === "mock";
@@ -19,7 +22,21 @@ function StatusBadge({ status }: { status: ServerInstance["status"] }) {
 
 export function InstanceDetailPage() {
   const { id = "" } = useParams();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialTab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "overview";
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  useEffect(() => {
+    if (TABS.includes(tabParam as Tab) && tabParam !== tab) {
+      setTab(tabParam as Tab);
+    }
+  }, [tabParam]);
+
+  function selectTab(next: Tab) {
+    setTab(next);
+    setSearchParams(next === "overview" ? {} : { tab: next }, { replace: true });
+  }
   const [instance, setInstance] = useState<ServerInstance | null>(null);
   const [cluster, setCluster] = useState<Cluster | null>(null);
   const [preview, setPreview] = useState<LaunchPreview | null>(null);
@@ -147,6 +164,7 @@ export function InstanceDetailPage() {
         {(
           [
             ["overview", "Overview"],
+            ["settings", "Settings"],
             ["console", "Console"],
             ["files", "Files"],
             ["launch", "Launch"],
@@ -156,7 +174,7 @@ export function InstanceDetailPage() {
             key={key}
             type="button"
             className={`tab ${tab === key ? "active" : ""}`}
-            onClick={() => setTab(key)}
+            onClick={() => selectTab(key)}
           >
             {label}
           </button>
@@ -220,6 +238,15 @@ export function InstanceDetailPage() {
             )}
           </div>
         </div>
+      )}
+
+      {tab === "settings" && (
+        <InstanceSettings
+          instanceId={instance.id}
+          onSaved={(next) => {
+            setInstance(next);
+          }}
+        />
       )}
 
       {tab === "console" && <LiveConsole instanceId={instance.id} />}

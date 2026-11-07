@@ -2,12 +2,13 @@ import type {
   ConsoleLine,
   DaemonStatus,
   DirEntry,
+  InstanceGameSettings,
   InstanceStatus,
   LaunchPreview,
   SteamCmdUpdateResult,
 } from "@ark-host/shared";
 import { panelConfig } from "./config.js";
-import type { ClusterRow, InstanceRow } from "./repos.js";
+import { buildSettingsFromRow, type ClusterRow, type InstanceRow } from "./repos.js";
 
 export interface DaemonActionResult {
   status: InstanceStatus;
@@ -34,6 +35,7 @@ async function daemonFetch(pathname: string, init?: RequestInit): Promise<Respon
 }
 
 export function toManagedSpec(instance: InstanceRow, cluster: ClusterRow | null) {
+  const settings = buildSettingsFromRow(instance, cluster);
   return {
     id: instance.id,
     name: instance.name,
@@ -48,11 +50,15 @@ export function toManagedSpec(instance: InstanceRow, cluster: ClusterRow | null)
     serverPassword: instance.server_password,
     clusterId: instance.cluster_ref,
     clusterToken: cluster?.cluster_id ?? null,
-    transferInventory: cluster ? Boolean(cluster.transfer_inventory) : true,
-    transferDinos: cluster ? Boolean(cluster.transfer_dinos) : true,
-    transferTribute: cluster ? Boolean(cluster.transfer_tribute) : true,
+    transferInventory: settings.transferInventory,
+    transferDinos: settings.transferDinos,
+    transferTribute: settings.transferTribute,
     installPath: instance.install_path,
     extraArgs: instance.extra_args,
+    battleEye: settings.battleEye,
+    crossplay: settings.crossplay,
+    modList: settings.modList,
+    gameSettings: settings,
   };
 }
 
@@ -246,6 +252,53 @@ export async function steamCmdUpdate(
   });
   if (!res.ok) throw new Error(`SteamCMD update failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as SteamCmdUpdateResult;
+}
+
+export async function previewInstanceSettings(
+  instance: InstanceRow,
+  settings: InstanceGameSettings,
+): Promise<{
+  preview: { gameUserSettings: string; gameIni: string };
+  iniPaths: { gameUserSettings: string; gameIni: string };
+}> {
+  const res = await daemonFetch(`/v1/instances/${instance.id}/settings/preview`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ edition: instance.edition, settings }),
+  });
+  if (!res.ok) throw new Error(`Settings preview failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as {
+    preview: { gameUserSettings: string; gameIni: string };
+    iniPaths: { gameUserSettings: string; gameIni: string };
+  };
+}
+
+export async function applyInstanceSettings(
+  instance: InstanceRow,
+  settings: InstanceGameSettings,
+  opts?: { writeRaw?: boolean; rawGameUserSettings?: string; rawGameIni?: string },
+): Promise<{
+  written: string[];
+  preview: { gameUserSettings: string; gameIni: string };
+  iniPaths: { gameUserSettings: string; gameIni: string };
+}> {
+  const res = await daemonFetch(`/v1/instances/${instance.id}/settings/apply`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      edition: instance.edition,
+      settings,
+      writeRaw: opts?.writeRaw ?? false,
+      rawGameUserSettings: opts?.rawGameUserSettings,
+      rawGameIni: opts?.rawGameIni,
+    }),
+  });
+  if (!res.ok) throw new Error(`Settings apply failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as {
+    written: string[];
+    preview: { gameUserSettings: string; gameIni: string };
+    iniPaths: { gameUserSettings: string; gameIni: string };
+  };
 }
 
 export { panelConfig };

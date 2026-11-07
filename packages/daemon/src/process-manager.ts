@@ -1,8 +1,11 @@
 import {
   findMap,
+  modListToLaunchArg,
   type ConsoleLine,
   type GameEdition,
+  type InstanceGameSettings,
   type InstanceStatus,
+  type ModEntry,
 } from "@ark-host/shared";
 import { EventEmitter } from "node:events";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -11,6 +14,7 @@ import path from "node:path";
 import { daemonConfig } from "./config.js";
 import { applyClusterSettings } from "./cluster-config.js";
 import { ensureInstanceDir } from "./file-sandbox.js";
+import { applyGameSettings } from "./settings-config.js";
 
 export interface ManagedSpec {
   id: string;
@@ -32,6 +36,16 @@ export interface ManagedSpec {
   transferTribute: boolean;
   installPath: string;
   extraArgs: string;
+  /** When false, append `-NoBattlEye`. Default false for Linux-friendly mock. */
+  battleEye?: boolean;
+  /** ASA crossplay flag. */
+  crossplay?: boolean;
+  /** Ordered mods (preferred). */
+  modList?: ModEntry[];
+  /** Legacy comma string — still accepted. */
+  mods?: string;
+  /** When set, rewritten to INI on every start (Claude ARK Panel behavior). */
+  gameSettings?: InstanceGameSettings;
 }
 
 interface RuntimeState {
@@ -74,7 +88,24 @@ export class ProcessManager extends EventEmitter {
     this.emitStatus(spec.id);
 
     await ensureInstanceDir(spec.id);
-    if (spec.clusterToken) {
+
+    // Panel-managed INI values are written right before each start (matches ARK Panel).
+    if (spec.gameSettings) {
+      try {
+        const applied = await applyGameSettings(spec.id, spec.edition, spec.gameSettings);
+        this.pushLine(
+          spec.id,
+          "system",
+          `Applied game settings to INI (${applied.written.length} path(s))`,
+        );
+      } catch (err) {
+        this.pushLine(
+          spec.id,
+          "stderr",
+          `Game settings apply failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    } else if (spec.clusterToken) {
       try {
         const applied = await applyClusterSettings(spec.id, spec.edition, {
           clusterToken: spec.clusterToken,
@@ -170,10 +201,33 @@ export class ProcessManager extends EventEmitter {
     }
 
     const extra = spec.extraArgs.trim().split(/\s+/).filter(Boolean);
+    const featureArgs: string[] = [];
+    const battleEye = (spec.gameSettings?.battleEye ?? spec.battleEye) === true;
+    if (!battleEye) featureArgs.push("-NoBattlEye");
+    const crossplay = spec.gameSettings?.crossplay ?? spec.crossplay;
+    if (crossplay !== false && spec.edition === "ASA") {
+      featureArgs.push("-ServerPlatform=All");
+    }
+    const modArg =
+      modListToLaunchArg(spec.gameSettings?.modList ?? spec.modList ?? []) ??
+      (() => {
+        const ids = (spec.mods ?? "")
+          .split(/[\s,;]+/)
+          .map((s) => s.trim())
+          .filter((s) => /^\d+$/.test(s));
+        return ids.length ? ids.join(",") : null;
+      })();
+    if (modArg) featureArgs.push(`-mods=${modArg}`);
+
     const clusterArgs: string[] = [];
     if (spec.clusterToken) {
       clusterArgs.push(`-clusterid=${spec.clusterToken}`);
-      if (spec.transferInventory) clusterArgs.push("-ClusterDirOverride=" + path.join(daemonConfig.instancesRoot, "_cluster", spec.clusterToken));
+      if (spec.transferInventory) {
+        clusterArgs.push(
+          "-ClusterDirOverride=" +
+            path.join(daemonConfig.instancesRoot, "_cluster", spec.clusterToken),
+        );
+      }
       // Transfer toggles are typically GameUserSettings; stub flags for visibility
       if (!spec.transferDinos) clusterArgs.push("-NoTransferDinos");
     }
@@ -185,7 +239,16 @@ export class ProcessManager extends EventEmitter {
       return {
         cwd: win64,
         command: path.join(proton, "proton"),
-        args: ["run", "./ArkAscendedServer.exe", sessionBits.join("?"), "-server", "-log", "-NoBattlEye", ...clusterArgs, ...extra],
+        args: [
+          "run",
+          "./ArkAscendedServer.exe",
+          sessionBits.join("?"),
+          "-server",
+          "-log",
+          ...featureArgs,
+          ...clusterArgs,
+          ...extra,
+        ],
         env: {
           STEAM_COMPAT_CLIENT_INSTALL_PATH: path.join(daemonConfig.instancesRoot, "_steam"),
           STEAM_COMPAT_DATA_PATH: prefix,
@@ -198,7 +261,7 @@ export class ProcessManager extends EventEmitter {
     return {
       cwd: linuxBin,
       command: path.join(linuxBin, "ShooterGameServer"),
-      args: [sessionBits.join("?"), "-server", "-log", ...clusterArgs, ...extra],
+      args: [sessionBits.join("?"), "-server", "-log", ...featureArgs, ...clusterArgs, ...extra],
       env: {},
     };
   }

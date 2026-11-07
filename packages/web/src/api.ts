@@ -3,8 +3,10 @@ import type {
   CreateClusterInput,
   CreateInstanceInput,
   DirEntry,
+  InstanceGameSettings,
   LaunchPreview,
   MapOption,
+  SaveInstanceSettingsInput,
   ServerInstance,
   SteamCmdUpdateResult,
   UpdateClusterInput,
@@ -104,6 +106,29 @@ export const api = {
       `/api/instances/${id}/cluster-apply`,
       { method: "POST" },
     );
+  },
+  getInstanceSettings(id: string) {
+    return request<{
+      settings: InstanceGameSettings;
+      iniPaths: { gameUserSettings: string; gameIni: string };
+      preview: { gameUserSettings: string; gameIni: string };
+      instance: ServerInstance;
+      cluster: Cluster | null;
+    }>(`/api/instances/${id}/settings`);
+  },
+  saveInstanceSettings(id: string, body: SaveInstanceSettingsInput) {
+    return request<{
+      settings: InstanceGameSettings;
+      written: string[];
+      iniPaths: { gameUserSettings: string; gameIni: string };
+      preview: { gameUserSettings: string; gameIni: string };
+      message: string;
+      instance: ServerInstance;
+      cluster: Cluster | null;
+    }>(`/api/instances/${id}/settings`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
   },
   listFiles(id: string, path = ".") {
     return request<{ entries: DirEntry[] }>(

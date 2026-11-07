@@ -7,6 +7,7 @@ import {
   createInstanceSchema,
   findMap,
   loginSchema,
+  saveInstanceSettingsSchema,
   updateClusterSchema,
   updateInstanceSchema,
 } from "@ark-host/shared";
@@ -21,6 +22,7 @@ import {
 import { panelConfig } from "./config.js";
 import {
   applyClusterToInstance,
+  applyInstanceSettings,
   deleteFile,
   downloadFile,
   getConsole,
@@ -29,6 +31,7 @@ import {
   launchPreview,
   listFiles,
   mkdirFile,
+  previewInstanceSettings,
   readFileContent,
   restartInstance,
   startInstance,
@@ -38,6 +41,7 @@ import {
   writeFileContent,
 } from "./daemon-client.js";
 import {
+  buildSettingsFromRow,
   createCluster,
   createInstance,
   deleteCluster,
@@ -48,6 +52,7 @@ import {
   listInstanceRows,
   mapCluster,
   mapInstance,
+  saveInstanceSettingsRow,
   suggestPorts,
   updateCluster,
   updateInstance,
@@ -333,6 +338,75 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return await applyClusterToInstance(row, cluster);
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : "Apply failed" });
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/api/instances/:id/settings", async (req, reply) => {
+    if (!(await requireAuth(req, reply))) return;
+    const row = getInstanceRow(req.params.id);
+    if (!row) return reply.code(404).send({ error: "Instance not found" });
+    const cluster = row.cluster_ref ? getCluster(row.cluster_ref) : null;
+    const settings = buildSettingsFromRow(row, cluster);
+    try {
+      const preview = await previewInstanceSettings(row, settings);
+      return {
+        settings,
+        iniPaths: preview.iniPaths,
+        preview: preview.preview,
+        instance: mapInstance(row, await getInstanceRuntime(row.id)),
+        cluster: cluster ? mapCluster(cluster) : null,
+      };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : "Settings load failed" });
+    }
+  });
+
+  app.put<{ Params: { id: string } }>("/api/instances/:id/settings", async (req, reply) => {
+    if (!(await requireAuth(req, reply))) return;
+    const row = getInstanceRow(req.params.id);
+    if (!row) return reply.code(404).send({ error: "Instance not found" });
+    const parsed = saveInstanceSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation failed", details: parsed.error.flatten() });
+    }
+    const settings = parsed.data.settings;
+    if (!findMap(row.edition, settings.mapId)) {
+      return reply.code(400).send({ error: `Unknown map '${settings.mapId}' for ${row.edition}` });
+    }
+    if (settings.clusterId && !getCluster(settings.clusterId)) {
+      return reply.code(400).send({ error: "Cluster not found" });
+    }
+
+    // Persist transfer toggles onto the attached cluster when present
+    if (settings.clusterId) {
+      updateCluster(settings.clusterId, {
+        transferInventory: settings.transferInventory,
+        transferDinos: settings.transferDinos,
+        transferTribute: settings.transferTribute,
+      });
+    }
+
+    const saved = saveInstanceSettingsRow(row.id, settings);
+    if (!saved) return reply.code(404).send({ error: "Instance not found" });
+    const cluster = saved.cluster_ref ? getCluster(saved.cluster_ref) : null;
+
+    try {
+      const applied = await applyInstanceSettings(saved, settings, {
+        writeRaw: parsed.data.writeRaw,
+        rawGameUserSettings: parsed.data.rawGameUserSettings,
+        rawGameIni: parsed.data.rawGameIni,
+      });
+      return {
+        settings: buildSettingsFromRow(saved, cluster),
+        written: applied.written,
+        iniPaths: applied.iniPaths,
+        preview: applied.preview,
+        message: "Settings saved to database and INI files",
+        instance: mapInstance(saved, await getInstanceRuntime(saved.id)),
+        cluster: cluster ? mapCluster(cluster) : null,
+      };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : "Settings save failed" });
     }
   });
 
