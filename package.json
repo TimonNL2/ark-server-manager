@@ -1,0 +1,24 @@
+{
+  "name": "ark-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simple web panel for ARK: Survival Ascended and Evolved dedicated servers",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @ark-host/shared && npm run build -w @ark-host/daemon && npm run build -w @ark-host/panel && npm run build -w @ark-host/web",
+    "dev": "npm run build -w @ark-host/shared && concurrently -n shared,daemon,panel,web -c cyan,magenta,green,yellow \"npm run dev -w @ark-host/shared\" \"npm run dev -w @ark-host/daemon\" \"npm run dev -w @ark-host/panel\" \"npm run dev -w @ark-host/web\"",
+    "dev:mock": "ARK_HOST_MOCK=1 npm run dev",
+    "typecheck": "npm run typecheck -w @ark-host/shared && npm run typecheck -w @ark-host/daemon && npm run typecheck -w @ark-host/panel && npm run typecheck -w @ark-host/web",
+    "start": "npm run start -w @ark-host/panel"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  },
+  "license": "MIT"
+}

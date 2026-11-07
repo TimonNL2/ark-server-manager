@@ -1,0 +1,5 @@
+# Replace :80 with your hostname, e.g. ark.example.com
+:80 {
+	encode gzip
+	reverse_proxy 127.0.0.1:3000
+}
