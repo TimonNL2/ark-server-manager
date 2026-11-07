@@ -1,6 +1,6 @@
 # SteamCMD, ASA Proton, and ASE native
 
-Ark Host does **not** invent Steam credentials. Dedicated server app IDs support **anonymous** SteamCMD login.
+Ark Server Manager does **not** invent Steam credentials. Dedicated server app IDs support **anonymous** SteamCMD login.
 
 ## App IDs
 

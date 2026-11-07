@@ -29,7 +29,7 @@ export function LoginPage() {
     <div className="login-wrap">
       <form className="login-panel form" onSubmit={(e) => void onSubmit(e)}>
         <h1>
-          Ark <span>Host</span>
+          Ark <span>Server Manager</span>
         </h1>
         <p className="lede">Sign in to manage ASA and ASE dedicated servers.</p>
         {error && <div className="error-banner">{error}</div>}

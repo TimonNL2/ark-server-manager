@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ark Host — one-shot Ubuntu bootstrap (22.04 / 24.04)
+# Ark Server Manager — one-shot Ubuntu bootstrap (22.04 / 24.04)
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/<org>/ark-host/main/install.sh | sudo bash
 #   or: sudo ./install.sh
@@ -227,7 +227,7 @@ print_summary() {
   cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Ark Host ${ARK_HOST_VERSION} installed
+  Ark Server Manager ${ARK_HOST_VERSION} installed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Panel (via Caddy):  http://<server-ip>/
   Direct panel:       http://127.0.0.1:${PANEL_PORT}/

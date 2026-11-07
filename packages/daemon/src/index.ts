@@ -314,7 +314,7 @@ async function main(): Promise<void> {
 
   await app.listen({ host: daemonConfig.host, port: daemonConfig.port });
   app.log.info(
-    `Ark Host daemon ${DAEMON_VERSION} on ${daemonConfig.host}:${daemonConfig.port} mock=${daemonConfig.mockMode}`,
+    `Ark Server Manager daemon ${DAEMON_VERSION} on ${daemonConfig.host}:${daemonConfig.port} mock=${daemonConfig.mockMode}`,
   );
 }
 

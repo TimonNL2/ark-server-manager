@@ -1,5 +1,5 @@
 [Unit]
-Description=Ark Host panel API
+Description=Ark Server Manager panel API
 Documentation=https://github.com/example/ark-host
 After=network-online.target ark-host-daemon.service
 Wants=network-online.target

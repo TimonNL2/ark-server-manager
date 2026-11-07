@@ -2,7 +2,7 @@
   "name": "ark-host",
   "version": "0.1.0",
   "private": true,
-  "description": "Simple web panel for ARK: Survival Ascended and Evolved dedicated servers",
+  "description": "Ark Ascended & Evolved server manager panel",
   "workspaces": [
     "packages/*"
   ],

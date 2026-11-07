@@ -1,4 +1,4 @@
-# Ark Host
+# Ark Server Manager
 
 Simple web panel for **ARK: Survival Ascended** and **ARK: Survival Evolved** dedicated servers. Pelican-inspired UX (instances, clusters, live console, file browser) without generic game eggs or a marketplace.
 
@@ -44,7 +44,7 @@ sudo ./install.sh
 Or once published to GitHub:
 
 ```bash
-sudo ARK_HOST_REPO_URL=https://github.com/<you>/ark-host.git bash -c \
+sudo ARK_HOST_REPO_URL=https://github.com/<you>/ark-server-manager.git bash -c \
   'curl -fsSL "$ARK_HOST_REPO_URL/raw/main/install.sh" -o /tmp/ark-host-install.sh && bash /tmp/ark-host-install.sh'
 ```
 

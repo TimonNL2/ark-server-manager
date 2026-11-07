@@ -14,7 +14,7 @@ export function CreateInstancePage() {
 
   const [name, setName] = useState("Island Main");
   const [mapId, setMapId] = useState("the-island");
-  const [sessionName, setSessionName] = useState("Ark Host Server");
+  const [sessionName, setSessionName] = useState("Ark Server Manager");
   const [gamePort, setGamePort] = useState(7777);
   const [queryPort, setQueryPort] = useState(27015);
   const [rconPort, setRconPort] = useState(27020);

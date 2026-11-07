@@ -47,7 +47,7 @@ async function main(): Promise<void> {
 
   await app.listen({ host: panelConfig.host, port: panelConfig.port });
   app.log.info(
-    `Ark Host panel ${panelConfig.version} on ${panelConfig.host}:${panelConfig.port} mock=${panelConfig.mockMode}`,
+    `Ark Server Manager panel ${panelConfig.version} on ${panelConfig.host}:${panelConfig.port} mock=${panelConfig.mockMode}`,
   );
   app.log.info(`Admin user ready: ${panelConfig.adminUsername}`);
 }

@@ -13,9 +13,9 @@ function Shell({ children }: { children: React.ReactNode }) {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            Ark <span>Host</span>
+            Ark <span>Server Manager</span>
           </div>
-          <div className="brand-sub">ASA · ASE control plane</div>
+          <div className="brand-sub">ASA · ASE server manager</div>
         </div>
         <nav className="nav">
           <NavLink to="/" end>
