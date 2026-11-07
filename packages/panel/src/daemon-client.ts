@@ -1,25 +1,35 @@
-import type { ConsoleLine, DaemonStatus, InstanceStatus } from "@ark-host/shared";
+import type {
+  ConsoleLine,
+  DaemonStatus,
+  DirEntry,
+  InstanceStatus,
+  LaunchPreview,
+  SteamCmdUpdateResult,
+} from "@ark-host/shared";
 import { panelConfig } from "./config.js";
-import type { InstanceRow } from "./repos.js";
-import type { ClusterRow } from "./repos.js";
+import type { ClusterRow, InstanceRow } from "./repos.js";
 
 export interface DaemonActionResult {
   status: InstanceStatus;
   pid: number | null;
 }
 
-function headers(): Record<string, string> {
+function jsonHeaders(): Record<string, string> {
   return {
     Authorization: `Bearer ${panelConfig.daemonToken}`,
     "Content-Type": "application/json",
   };
 }
 
+function authHeader(): Record<string, string> {
+  return { Authorization: `Bearer ${panelConfig.daemonToken}` };
+}
+
 async function daemonFetch(pathname: string, init?: RequestInit): Promise<Response> {
   const url = `${panelConfig.daemonUrl}${pathname}`;
   return fetch(url, {
     ...init,
-    headers: { ...headers(), ...(init?.headers ?? {}) },
+    headers: { ...authHeader(), ...(init?.headers ?? {}) },
   });
 }
 
@@ -70,24 +80,20 @@ export async function startInstance(
 ): Promise<DaemonActionResult> {
   const res = await daemonFetch(`/v1/instances/${instance.id}/start`, {
     method: "POST",
+    headers: jsonHeaders(),
     body: JSON.stringify(toManagedSpec(instance, cluster)),
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Start failed: ${res.status} ${body}`);
-  }
+  if (!res.ok) throw new Error(`Start failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as DaemonActionResult;
 }
 
 export async function stopInstance(id: string): Promise<DaemonActionResult> {
   const res = await daemonFetch(`/v1/instances/${id}/stop`, {
     method: "POST",
+    headers: jsonHeaders(),
     body: "{}",
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Stop failed: ${res.status} ${body}`);
-  }
+  if (!res.ok) throw new Error(`Stop failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as DaemonActionResult;
 }
 
@@ -97,18 +103,149 @@ export async function restartInstance(
 ): Promise<DaemonActionResult> {
   const res = await daemonFetch(`/v1/instances/${instance.id}/restart`, {
     method: "POST",
+    headers: jsonHeaders(),
     body: JSON.stringify(toManagedSpec(instance, cluster)),
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Restart failed: ${res.status} ${body}`);
-  }
+  if (!res.ok) throw new Error(`Restart failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as DaemonActionResult;
 }
 
-export async function getConsole(id: string, after = 0): Promise<ConsoleLine[]> {
+export async function getConsole(id: string, after = -1): Promise<ConsoleLine[]> {
   const res = await daemonFetch(`/v1/instances/${id}/console?after=${after}`);
   if (!res.ok) return [];
   const data = (await res.json()) as { lines: ConsoleLine[] };
   return data.lines;
 }
+
+export function daemonConsoleWsUrl(id: string, after = -1): string {
+  const base = panelConfig.daemonUrl.replace(/^http/, "ws");
+  return `${base}/v1/instances/${id}/console/ws?after=${after}`;
+}
+
+export async function listFiles(id: string, relPath = "."): Promise<DirEntry[]> {
+  const res = await daemonFetch(
+    `/v1/instances/${id}/files?path=${encodeURIComponent(relPath)}`,
+  );
+  if (!res.ok) throw new Error(`List files failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { entries: DirEntry[] };
+  return data.entries;
+}
+
+export async function readFileContent(id: string, relPath: string) {
+  const res = await daemonFetch(
+    `/v1/instances/${id}/files/content?path=${encodeURIComponent(relPath)}`,
+  );
+  if (!res.ok) throw new Error(`Read failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { content: string; truncated: boolean; size: number };
+}
+
+export async function writeFileContent(id: string, relPath: string, content: string) {
+  const res = await daemonFetch(`/v1/instances/${id}/files/content`, {
+    method: "PUT",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ path: relPath, content }),
+  });
+  if (!res.ok) throw new Error(`Write failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { path: string; size: number };
+}
+
+export async function mkdirFile(id: string, relPath: string) {
+  const res = await daemonFetch(`/v1/instances/${id}/files/mkdir`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ path: relPath }),
+  });
+  if (!res.ok) throw new Error(`mkdir failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { path: string };
+}
+
+export async function deleteFile(id: string, relPath: string) {
+  const res = await daemonFetch(
+    `/v1/instances/${id}/files?path=${encodeURIComponent(relPath)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new Error(`Delete failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { ok: boolean };
+}
+
+export async function downloadFile(id: string, relPath: string): Promise<Response> {
+  const res = await daemonFetch(
+    `/v1/instances/${id}/files/download?path=${encodeURIComponent(relPath)}`,
+  );
+  if (!res.ok) throw new Error(`Download failed: ${res.status} ${await res.text()}`);
+  return res;
+}
+
+export async function uploadFile(
+  id: string,
+  relPath: string,
+  filename: string,
+  data: Buffer,
+  contentType: string,
+): Promise<{ path: string; size: number }> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(data)], { type: contentType || "application/octet-stream" }),
+    filename,
+  );
+  const res = await daemonFetch(
+    `/v1/instances/${id}/files/upload?path=${encodeURIComponent(relPath)}`,
+    {
+      method: "POST",
+      headers: authHeader(),
+      body: form,
+    },
+  );
+  if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { path: string; size: number };
+}
+
+export async function launchPreview(
+  instance: InstanceRow,
+  cluster: ClusterRow | null,
+): Promise<LaunchPreview> {
+  const res = await daemonFetch(`/v1/instances/${instance.id}/launch-preview`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify(toManagedSpec(instance, cluster)),
+  });
+  if (!res.ok) throw new Error(`Launch preview failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as LaunchPreview;
+}
+
+export async function applyClusterToInstance(
+  instance: InstanceRow,
+  cluster: ClusterRow,
+): Promise<{ clusterDir: string; written: string[] }> {
+  const res = await daemonFetch(`/v1/instances/${instance.id}/cluster-apply`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      edition: instance.edition,
+      clusterToken: cluster.cluster_id,
+      transferInventory: Boolean(cluster.transfer_inventory),
+      transferDinos: Boolean(cluster.transfer_dinos),
+      transferTribute: Boolean(cluster.transfer_tribute),
+    }),
+  });
+  if (!res.ok) throw new Error(`Cluster apply failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { clusterDir: string; written: string[] };
+}
+
+export async function steamCmdUpdate(
+  instance: InstanceRow,
+): Promise<SteamCmdUpdateResult> {
+  const res = await daemonFetch(`/v1/instances/${instance.id}/steamcmd-update`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      edition: instance.edition,
+      installPath: instance.install_path,
+    }),
+  });
+  if (!res.ok) throw new Error(`SteamCMD update failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as SteamCmdUpdateResult;
+}
+
+export { panelConfig };

@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
 import { ClustersPage } from "./pages/ClustersPage";
 import { CreateInstancePage } from "./pages/CreateInstancePage";
+import { InstanceDetailPage } from "./pages/InstanceDetailPage";
 import { InstancesPage } from "./pages/InstancesPage";
 import { LoginPage } from "./pages/LoginPage";
 
@@ -65,6 +66,14 @@ export function App() {
         element={
           <Private>
             <CreateInstancePage />
+          </Private>
+        }
+      />
+      <Route
+        path="/instances/:id"
+        element={
+          <Private>
+            <InstanceDetailPage />
           </Private>
         }
       />

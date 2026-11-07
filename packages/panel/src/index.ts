@@ -8,6 +8,7 @@ import { ensureAdminUser } from "./auth.js";
 import { panelConfig } from "./config.js";
 import { initDb } from "./db.js";
 import { registerRoutes } from "./routes.js";
+import { registerWebsocket } from "./ws.js";
 
 async function main(): Promise<void> {
   fs.mkdirSync(panelConfig.dataDir, { recursive: true });
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
   initDb();
   ensureAdminUser();
 
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: 30 * 1024 * 1024 });
   await app.register(cors, {
     origin: true,
     credentials: true,
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
     secret: panelConfig.sessionSecret,
   });
 
+  await registerWebsocket(app);
   await registerRoutes(app);
 
   const webDist = panelConfig.webDist;

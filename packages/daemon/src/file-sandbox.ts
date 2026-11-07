@@ -1,16 +1,31 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { DirEntry } from "@ark-host/shared";
 import { daemonConfig } from "./config.js";
 
-/**
- * Path-sandbox helpers for instance directories.
- * Full file browser UI is ASM-3; these hooks are ready for it.
- */
+const FORBIDDEN_NAMES = new Set(["", ".", ".."]);
+const MAX_WRITE_BYTES = 2_000_000;
+const MAX_UPLOAD_BYTES = 25_000_000;
+
 export function resolveInstancePath(instanceId: string, relPath = "."): string {
   const root = path.resolve(daemonConfig.instancesRoot, instanceId);
-  const target = path.resolve(root, relPath);
+  const normalized = relPath.replace(/\\/g, "/");
+  if (normalized.split("/").some((p) => FORBIDDEN_NAMES.has(p) && p !== ".")) {
+    // allow "." as whole path only
+  }
+  if (normalized.includes("\0")) throw new Error("Invalid path");
+  const target = path.resolve(root, normalized === "" ? "." : normalized);
   if (target !== root && !target.startsWith(root + path.sep)) {
     throw new Error("Path escapes instance sandbox");
+  }
+  return target;
+}
+
+export function resolveClusterPath(clusterToken: string, relPath = "."): string {
+  const root = path.resolve(daemonConfig.instancesRoot, "_cluster", clusterToken);
+  const target = path.resolve(root, relPath);
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error("Path escapes cluster sandbox");
   }
   return target;
 }
@@ -20,15 +35,25 @@ export async function ensureInstanceDir(instanceId: string): Promise<string> {
   await fs.mkdir(root, { recursive: true });
   await fs.mkdir(path.join(root, "Saved"), { recursive: true });
   await fs.mkdir(path.join(root, "Config"), { recursive: true });
+  await fs.mkdir(path.join(root, "ShooterGame", "Saved", "Config", "WindowsServer"), {
+    recursive: true,
+  });
+  await fs.mkdir(path.join(root, "ShooterGame", "Saved", "Config", "LinuxServer"), {
+    recursive: true,
+  });
   return root;
 }
 
-export interface DirEntry {
-  name: string;
-  path: string;
-  type: "file" | "dir";
-  size: number;
-  mtime: string;
+export async function ensureClusterDir(clusterToken: string): Promise<string> {
+  const root = resolveClusterPath(clusterToken);
+  await fs.mkdir(root, { recursive: true });
+  return root;
+}
+
+function toPosixRel(relPath: string, name: string): string {
+  const base = relPath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+  if (!base || base === ".") return name;
+  return `${base}/${name}`;
 }
 
 export async function listDir(instanceId: string, relPath = "."): Promise<DirEntry[]> {
@@ -40,7 +65,7 @@ export async function listDir(instanceId: string, relPath = "."): Promise<DirEnt
     const st = await fs.stat(full);
     out.push({
       name: ent.name,
-      path: path.posix.join(relPath.replace(/\\/g, "/"), ent.name).replace(/^\.\//, ""),
+      path: toPosixRel(relPath, ent.name),
       type: ent.isDirectory() ? "dir" : "file",
       size: st.size,
       mtime: st.mtime.toISOString(),
@@ -56,7 +81,7 @@ export async function readFileBounded(
   instanceId: string,
   relPath: string,
   maxBytes = 512_000,
-): Promise<{ content: string; truncated: boolean }> {
+): Promise<{ content: string; truncated: boolean; size: number }> {
   const abs = resolveInstancePath(instanceId, relPath);
   const st = await fs.stat(abs);
   if (!st.isFile()) throw new Error("Not a file");
@@ -65,5 +90,61 @@ export async function readFileBounded(
   return {
     content: buf.subarray(0, maxBytes).toString("utf8"),
     truncated,
+    size: buf.length,
   };
 }
+
+export async function writeFileText(
+  instanceId: string,
+  relPath: string,
+  content: string,
+): Promise<{ path: string; size: number }> {
+  if (Buffer.byteLength(content, "utf8") > MAX_WRITE_BYTES) {
+    throw new Error(`File exceeds ${MAX_WRITE_BYTES} byte write limit`);
+  }
+  const abs = resolveInstancePath(instanceId, relPath);
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  await fs.writeFile(abs, content, "utf8");
+  const st = await fs.stat(abs);
+  return { path: relPath.replace(/\\/g, "/"), size: st.size };
+}
+
+export async function writeFileBuffer(
+  instanceId: string,
+  relPath: string,
+  data: Buffer,
+): Promise<{ path: string; size: number }> {
+  if (data.length > MAX_UPLOAD_BYTES) {
+    throw new Error(`Upload exceeds ${MAX_UPLOAD_BYTES} byte limit`);
+  }
+  const abs = resolveInstancePath(instanceId, relPath);
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  await fs.writeFile(abs, data);
+  return { path: relPath.replace(/\\/g, "/"), size: data.length };
+}
+
+export async function mkdirp(instanceId: string, relPath: string): Promise<{ path: string }> {
+  const abs = resolveInstancePath(instanceId, relPath);
+  await fs.mkdir(abs, { recursive: true });
+  return { path: relPath.replace(/\\/g, "/") };
+}
+
+export async function removePath(instanceId: string, relPath: string): Promise<void> {
+  if (!relPath || relPath === "." || relPath === "/") {
+    throw new Error("Refusing to delete instance root");
+  }
+  const abs = resolveInstancePath(instanceId, relPath);
+  const root = resolveInstancePath(instanceId);
+  if (abs === root) throw new Error("Refusing to delete instance root");
+  await fs.rm(abs, { recursive: true, force: true });
+}
+
+export async function readFileRaw(instanceId: string, relPath: string): Promise<Buffer> {
+  const abs = resolveInstancePath(instanceId, relPath);
+  const st = await fs.stat(abs);
+  if (!st.isFile()) throw new Error("Not a file");
+  if (st.size > MAX_UPLOAD_BYTES) throw new Error("File too large to download via panel");
+  return fs.readFile(abs);
+}
+
+export { MAX_WRITE_BYTES, MAX_UPLOAD_BYTES };

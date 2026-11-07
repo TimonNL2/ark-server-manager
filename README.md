@@ -1,15 +1,18 @@
 # Ark Host
 
-Simple web panel for **ARK: Survival Ascended** and **ARK: Survival Evolved** dedicated servers. Pelican-inspired UX (instances, clusters, later file browser + live console) without generic game eggs or a marketplace.
+Simple web panel for **ARK: Survival Ascended** and **ARK: Survival Evolved** dedicated servers. Pelican-inspired UX (instances, clusters, live console, file browser) without generic game eggs or a marketplace.
 
 > English UI only. Ubuntu Server on Proxmox is the primary deploy target. One `install.sh` bootstraps the stack.
 
-## Features (MVP / ASM-2)
+## Features (ASM-2 + ASM-3)
 
 - Local admin auth (session cookie)
 - CRUD for **ServerInstance** (ASA \| ASE) and **Cluster**
 - Start / stop / restart via host **daemon**
 - Create-instance wizard (edition, map, ports, cluster attach)
+- **Instance detail**: live WebSocket console, sandboxed file browser, launch-command preview
+- **Cluster apply**: shared cluster dir + `GameUserSettings.ini` transfer flags
+- SteamCMD update action (anonymous app ids; mocked when `ARK_HOST_MOCK=1`)
 - **Mock mode** so the UI works without downloading multi‑GB servers
 - Idempotent-ish Ubuntu **install.sh** (Node, Caddy, systemd, secrets, admin user)
 
@@ -89,13 +92,11 @@ ARK_HOST_MOCK=1 npm run dev
 
 See [`docs/proxmox.md`](docs/proxmox.md). Bridge networking, forward game UDP ports, size RAM for ASA (~24 GB+ for one map).
 
-## Roadmap (ASM-3+)
+## Roadmap (next)
 
-- Live console WebSocket UI
-- In-browser file manager (daemon sandbox already stubbed)
-- Cluster polish (shared dirs, transfer toggles written to configs)
-- Optional SteamCMD update jobs from the panel
+- RCON input in the live console
 - Backups / scheduled restarts
+- Update-job progress UI beyond the SteamCMD stub
 
 ## License
 

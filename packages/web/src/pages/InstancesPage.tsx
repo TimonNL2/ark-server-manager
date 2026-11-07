@@ -87,7 +87,9 @@ export function InstancesPage() {
           {instances.map((inst) => (
             <article className="panel" key={inst.id}>
               <div className="panel-title">
-                <h2>{inst.name}</h2>
+                <h2>
+                  <Link to={`/instances/${inst.id}`}>{inst.name}</Link>
+                </h2>
                 <div className="btn-row">
                   <span className={`badge badge-${inst.edition.toLowerCase()}`}>{inst.edition}</span>
                   <StatusBadge status={inst.status} />
@@ -102,6 +104,9 @@ export function InstancesPage() {
                 <span>{inst.maxPlayers} slots</span>
               </div>
               <div className="btn-row">
+                <Link className="btn btn-ghost" to={`/instances/${inst.id}`}>
+                  Open
+                </Link>
                 <button
                   className="btn btn-primary"
                   type="button"

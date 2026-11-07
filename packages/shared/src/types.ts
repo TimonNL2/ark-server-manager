@@ -59,9 +59,37 @@ export interface DaemonStatus {
 }
 
 export interface ConsoleLine {
+  /** Monotonic index within the daemon ring buffer (for WS / poll cursors). */
+  index: number;
   ts: string;
   stream: "stdout" | "stderr" | "system";
   text: string;
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+  size: number;
+  mtime: string;
+}
+
+export interface LaunchPreview {
+  cwd: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  rendered: string;
+}
+
+export interface SteamCmdUpdateResult {
+  ok: boolean;
+  mock: boolean;
+  edition: GameEdition;
+  appId: number;
+  installPath: string;
+  message: string;
+  commandPreview: string;
 }
 
 export interface ApiError {

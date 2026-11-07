@@ -9,6 +9,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { daemonConfig } from "./config.js";
+import { applyClusterSettings } from "./cluster-config.js";
+import { ensureInstanceDir } from "./file-sandbox.js";
 
 export interface ManagedSpec {
   id: string;
@@ -39,6 +41,7 @@ interface RuntimeState {
   mockTimer: NodeJS.Timeout | null;
   startedAt: string | null;
   lines: ConsoleLine[];
+  nextIndex: number;
 }
 
 const MAX_LINES = 500;
@@ -54,9 +57,10 @@ export class ProcessManager extends EventEmitter {
     };
   }
 
-  getConsole(id: string, after = 0): ConsoleLine[] {
+  /** Return lines with index > after (exclusive cursor). */
+  getConsole(id: string, after = -1): ConsoleLine[] {
     const s = this.ensure(id);
-    return s.lines.slice(after);
+    return s.lines.filter((l) => l.index > after);
   }
 
   async start(spec: ManagedSpec): Promise<{ status: InstanceStatus; pid: number | null }> {
@@ -68,6 +72,29 @@ export class ProcessManager extends EventEmitter {
     state.status = "starting";
     this.pushLine(spec.id, "system", `Starting ${spec.name} (${spec.edition})…`);
     this.emitStatus(spec.id);
+
+    await ensureInstanceDir(spec.id);
+    if (spec.clusterToken) {
+      try {
+        const applied = await applyClusterSettings(spec.id, spec.edition, {
+          clusterToken: spec.clusterToken,
+          transferInventory: spec.transferInventory,
+          transferDinos: spec.transferDinos,
+          transferTribute: spec.transferTribute,
+        });
+        this.pushLine(
+          spec.id,
+          "system",
+          `Cluster dir ${applied.clusterDir}; wrote GameUserSettings (${applied.written.length} path(s))`,
+        );
+      } catch (err) {
+        this.pushLine(
+          spec.id,
+          "stderr",
+          `Cluster config apply failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
     if (daemonConfig.mockMode) {
       return this.startMock(spec);
@@ -194,7 +221,7 @@ export class ProcessManager extends EventEmitter {
     state.mockTimer = setInterval(() => {
       tick += 1;
       this.pushLine(spec.id, "stdout", `[Mock] heartbeat tick=${tick} players=0/${spec.maxPlayers}`);
-    }, 15_000);
+    }, 4_000);
     state.mockTimer.unref();
 
     this.emitStatus(spec.id);
@@ -261,6 +288,7 @@ export class ProcessManager extends EventEmitter {
         mockTimer: null,
         startedAt: null,
         lines: [],
+        nextIndex: 0,
       };
       this.states.set(id, s);
     }
@@ -269,7 +297,12 @@ export class ProcessManager extends EventEmitter {
 
   private pushLine(id: string, stream: ConsoleLine["stream"], text: string): void {
     const s = this.ensure(id);
-    const line: ConsoleLine = { ts: new Date().toISOString(), stream, text };
+    const line: ConsoleLine = {
+      index: s.nextIndex++,
+      ts: new Date().toISOString(),
+      stream,
+      text,
+    };
     s.lines.push(line);
     if (s.lines.length > MAX_LINES) {
       s.lines.splice(0, s.lines.length - MAX_LINES);

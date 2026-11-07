@@ -46,3 +46,6 @@ export type UpdateClusterInput = z.infer<typeof updateClusterSchema>;
 export type CreateInstanceInput = z.infer<typeof createInstanceSchema>;
 export type UpdateInstanceInput = z.infer<typeof updateInstanceSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+
+// Re-export for web clients that import update types alongside entities
+export type { UpdateClusterInput as ClusterPatch };
